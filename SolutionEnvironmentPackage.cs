@@ -145,19 +145,18 @@ namespace SolutionEnvironment
 
         private List<EnvVar> savedEnvironmentVariables = new List<EnvVar>();
 
-        string ResolveFilename(string filename, string solutionDir, string solutionName)
+        string ResolveFilename(string filename, List<EnvVar> internalVars)
         {
             // Resolve all environment variables.
             filename = Regex.Replace(filename, @"\$\((\w+)\)", (m) =>
             {
                 string env = m.Groups[1].Value;
-                // See if we can resolve it.  If not, then exit.
-                if (string.Compare(env, "solutiondir", true) == 0)
-                    return solutionDir;
-                else if (string.Compare(env, "solutionname", true) == 0)
-                    return solutionName;
-                else
-                    return Environment.GetEnvironmentVariable(env);
+                foreach (var v in internalVars)
+                {
+                    if (string.Compare(env, v.name, true) == 0)
+                        return v.value;
+                }
+                return Environment.GetEnvironmentVariable(env);
             });
 
             // Resolve all registry entries.
@@ -191,7 +190,7 @@ namespace SolutionEnvironment
             return filename;
         }
 
-        bool ParseSlnEnvFile(string filename, string solutionDir, string solutionName, string solutionConfigurationName)
+        bool ParseSlnEnvFile(string filename, List<EnvVar> internalVars, string solutionConfigurationName)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 
@@ -207,7 +206,7 @@ namespace SolutionEnvironment
                 {
                     lineNumber++;
 
-                    line.Trim();
+                    line = line.Trim();
                     if (line.Length == 0)
                         continue;
 
@@ -224,8 +223,8 @@ namespace SolutionEnvironment
                             string command = line.Substring(0, spacePos).ToLower();
                             if (command == "include" || command == "forceinclude")
                             {
-                                string newFilename = ResolveFilename(line.Substring(spacePos + 1), solutionDir, solutionName);
-                                if (!ParseSlnEnvFile(newFilename, solutionDir, solutionName, solutionConfigurationName))
+                                string newFilename = ResolveFilename(line.Substring(spacePos + 1), internalVars);
+                                if (!ParseSlnEnvFile(newFilename, internalVars, solutionConfigurationName))
                                 {
                                     if (command == "forceinclude")
                                     {
@@ -245,21 +244,18 @@ namespace SolutionEnvironment
                         }
                     }
 
-                    string name = line.Substring(0, equalsPos);
-                    name.Trim();
+                    string name = line.Substring(0, equalsPos).Trim();
 
                     int colonPos = name.IndexOf(':');
                     if (colonPos != -1)
                     {
-                        string configName = name.Substring(0, colonPos);
-                        configName.Trim();
+                        string configName = name.Substring(0, colonPos).Trim();
                         if (configName != solutionConfigurationName)
                             continue;
-                        name = name.Substring(colonPos + 1);
-                        name.Trim();
+                        name = name.Substring(colonPos + 1).Trim();
                     }
 
-                    string value = ResolveFilename(line.Substring(equalsPos + 1).Trim(), solutionDir, solutionName);
+                    string value = ResolveFilename(line.Substring(equalsPos + 1).Trim(), internalVars);
 
                     string buffer = Environment.GetEnvironmentVariable(name);
 
@@ -296,15 +292,17 @@ namespace SolutionEnvironment
 
             string fullPath = _dte.Solution.FullName;
 
-            string solutionDir = Path.GetDirectoryName(fullPath);
-
-            string solutionName = Path.GetFileNameWithoutExtension(fullPath);
+            List<EnvVar> internalVars = new List<EnvVar>
+            {
+                new EnvVar{ name = "SolutionDir", value = Path.GetDirectoryName(fullPath) },
+                new EnvVar{ name = "SolutionName", value = Path.GetFileNameWithoutExtension(fullPath) },
+            };
 
             string solutionConfigurationName = _dte.Solution.SolutionBuild.ActiveConfiguration.Name;
 
             fullPath = Path.ChangeExtension(fullPath, ".slnenv");
 
-            if (ParseSlnEnvFile(fullPath, solutionDir, solutionName, solutionConfigurationName))
+            if (ParseSlnEnvFile(fullPath, internalVars, solutionConfigurationName))
                 _pane.OutputString(string.Format("Solution Environment {0} loaded\n", fullPath));
         }
     }
