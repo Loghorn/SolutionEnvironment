@@ -21,7 +21,12 @@ MYPATH=$(SolutionDir)\Include
 
 The solution's name is available through `$(SolutionName)`.
 ```
-SOLNAME=$(SolutionName)\Include
+SOLINCLUDE=$(SolutionName)\Include
+```
+
+The solution's drive is available through `$(SolutionDrive)`.
+```
+SOLDRIVE=$(SolutionDrive)
 ```
 
 Environment variables may be inserted using the `$(EnvironmentVariableName)` syntax. This has the same functionality as a batch file's `%EnvironmentVariableName%` substitution syntax.

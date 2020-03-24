@@ -296,6 +296,7 @@ namespace SolutionEnvironment
             {
                 new EnvVar{ name = "SolutionDir", value = Path.GetDirectoryName(fullPath) },
                 new EnvVar{ name = "SolutionName", value = Path.GetFileNameWithoutExtension(fullPath) },
+                new EnvVar{ name = "SolutionDrive", value = Path.GetPathRoot(fullPath) },
             };
 
             string solutionConfigurationName = _dte.Solution.SolutionBuild.ActiveConfiguration.Name;
