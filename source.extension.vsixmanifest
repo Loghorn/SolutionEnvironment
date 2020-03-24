@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
     <Metadata>
-        <Identity Id="SolutionEnvironment.fd3183b7-b5b5-4df3-bc82-594fb5c9375e" Version="1.04.001" Language="en-US" Publisher="Loghorn" />
+        <Identity Id="SolutionEnvironment.fd3183b7-b5b5-4df3-bc82-594fb5c9375e" Version="1.04.003" Language="en-US" Publisher="Loghorn" />
         <DisplayName>Solution Environment</DisplayName>
         <Description xml:space="preserve">Provides support for customized global environment settings on a per solution basis</Description>
         <MoreInfo>https://github.com/Loghorn/SolutionEnvironment</MoreInfo>

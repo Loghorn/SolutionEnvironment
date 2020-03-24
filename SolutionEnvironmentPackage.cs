@@ -12,6 +12,7 @@ using Microsoft.Win32;
 using System.IO;
 using Microsoft.VisualStudio;
 using System.Text.RegularExpressions;
+using System.Linq;
 
 namespace SolutionEnvironment
 {
@@ -294,26 +295,51 @@ namespace SolutionEnvironment
             }
         }
 
+        public IEnumerable<T> Traverse<T>(IEnumerable<object> items, Func<object, IEnumerable<object>> childSelector)
+        {
+            var stack = new Stack<object>(items);
+            while (stack.Any())
+            {
+                var next = stack.Pop();
+                if (next is T)
+                    yield return (T)next;
+                foreach (var child in childSelector(next))
+                    stack.Push(child);
+            }
+        }
+
         void ReadSolutionEnvironment()
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 
-            UndoEnvironmentChanges();
-            savedEnvironmentVariables.Clear();
-
             string fullPath = _dte.Solution.FullName;
 
-            string solutionConfigurationName = _dte.Solution.SolutionBuild.ActiveConfiguration.Name;
-            string solutionPlatform = "";
-
-            if (_dte.Solution.Projects.Count > 0)
+            try
             {
-                var configmgr = _dte.Solution.Projects.Item(1).ConfigurationManager;
-                var config = configmgr.ActiveConfiguration;
-                solutionPlatform = config.PlatformName;
-            }
+                UndoEnvironmentChanges();
+                savedEnvironmentVariables.Clear();
 
-            List<EnvVar> internalVars = new List<EnvVar>
+                string solutionConfigurationName = _dte.Solution.SolutionBuild.ActiveConfiguration.Name;
+                string solutionPlatform = "";
+
+                var configmgr = Traverse<Project>(_dte.Solution.Projects.Cast<Project>(), (p) =>
+                {
+                    switch (p)
+                    {
+                        case Project project when project.ProjectItems != null:
+                            return project.ProjectItems.Cast<ProjectItem>();
+                        case ProjectItem item when item.SubProject != null:
+                            return Enumerable.Repeat(item.SubProject, 1);
+                    }
+                    return Enumerable.Empty<object>();
+                }).Where((p) => p.ConfigurationManager != null).Select((p) => p.ConfigurationManager).FirstOrDefault();
+                if (configmgr != null)
+                {
+                    var config = configmgr.ActiveConfiguration;
+                    solutionPlatform = config.PlatformName;
+                }
+
+                List<EnvVar> internalVars = new List<EnvVar>
             {
                 new EnvVar{ name = "SolutionDir", value = Path.GetDirectoryName(fullPath) },
                 new EnvVar{ name = "SolutionName", value = Path.GetFileNameWithoutExtension(fullPath) },
@@ -322,10 +348,15 @@ namespace SolutionEnvironment
                 new EnvVar{ name = "SolutionPlatform", value = solutionPlatform },
             };
 
-            fullPath = Path.ChangeExtension(fullPath, ".slnenv");
+                fullPath = Path.ChangeExtension(fullPath, ".slnenv");
 
-            if (ParseSlnEnvFile(fullPath, internalVars, solutionConfigurationName, solutionPlatform))
-                _pane.OutputString(string.Format("Solution Environment {0} loaded\n", fullPath));
+                if (ParseSlnEnvFile(fullPath, internalVars, solutionConfigurationName, solutionPlatform))
+                    _pane.OutputString(string.Format("Solution Environment {0} loaded\n", fullPath));
+            }
+            catch (Exception e)
+            {
+                _pane.OutputString(string.Format("Solution Environment {0} error: {1}\n", fullPath, e.Message));
+            }
         }
     }
 }
