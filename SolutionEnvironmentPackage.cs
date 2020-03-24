@@ -37,6 +37,11 @@ namespace SolutionEnvironment
     //[ProvideAutoLoad(UIContextGuids80.SolutionHasSingleProject, PackageAutoLoadFlags.BackgroundLoad)]
     //[ProvideAutoLoad(UIContextGuids80.SolutionHasMultipleProjects, PackageAutoLoadFlags.BackgroundLoad)]
     [ProvideAutoLoad(VSConstants.UICONTEXT.SolutionOpening_string, PackageAutoLoadFlags.BackgroundLoad)]
+    [ProvideAutoLoad(VSConstants.UICONTEXT.FullSolutionLoading_string, PackageAutoLoadFlags.BackgroundLoad)]
+    [ProvideAutoLoad(VSConstants.UICONTEXT.Debugging_string, PackageAutoLoadFlags.BackgroundLoad)]
+    [ProvideAutoLoad(VSConstants.UICONTEXT.SolutionBuilding_string, PackageAutoLoadFlags.BackgroundLoad)]
+    [ProvideAutoLoad(VSConstants.UICONTEXT.SolutionExists_string, PackageAutoLoadFlags.BackgroundLoad)]
+    [ProvideAutoLoad(VSConstants.UICONTEXT.SynchronousSolutionOperation_string, PackageAutoLoadFlags.BackgroundLoad)]
     public sealed class SolutionEnvironmentPackage : AsyncPackage
     {
         private DTE2 _dte;
@@ -60,7 +65,7 @@ namespace SolutionEnvironment
         {
             // When initialized asynchronously, the current thread may be a background thread at this point.
             // Do any initialization that requires the UI thread after switching to the UI thread.
-            await this.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
+            await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
 
             _dte = await GetServiceAsync(typeof(DTE)) as DTE2;
             Assumes.Present(_dte);
@@ -190,7 +195,7 @@ namespace SolutionEnvironment
             return filename;
         }
 
-        bool ParseSlnEnvFile(string filename, List<EnvVar> internalVars, string solutionConfigurationName)
+        bool ParseSlnEnvFile(string filename, List<EnvVar> internalVars, string solutionConfigurationName, string solutionPlatform)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 
@@ -224,7 +229,7 @@ namespace SolutionEnvironment
                             if (command == "include" || command == "forceinclude")
                             {
                                 string newFilename = ResolveFilename(line.Substring(spacePos + 1), internalVars);
-                                if (!ParseSlnEnvFile(newFilename, internalVars, solutionConfigurationName))
+                                if (!ParseSlnEnvFile(newFilename, internalVars, solutionConfigurationName, solutionPlatform))
                                 {
                                     if (command == "forceinclude")
                                     {
@@ -249,8 +254,14 @@ namespace SolutionEnvironment
                     int colonPos = name.IndexOf(':');
                     if (colonPos != -1)
                     {
-                        string configName = name.Substring(0, colonPos).Trim();
-                        if (configName != solutionConfigurationName)
+                        var match = Regex.Match(name.Substring(0, colonPos).Trim(), @"([^|]+)?(?:\|(.*))?");
+
+                        string configName = match.Groups[1].Value;
+                        string platform = match.Groups[2].Value;
+
+                        if (configName.Length > 0 && configName != solutionConfigurationName)
+                            continue;
+                        if (platform.Length > 0 && platform != solutionPlatform)
                             continue;
                         name = name.Substring(colonPos + 1).Trim();
                     }
@@ -292,18 +303,28 @@ namespace SolutionEnvironment
 
             string fullPath = _dte.Solution.FullName;
 
+            string solutionConfigurationName = _dte.Solution.SolutionBuild.ActiveConfiguration.Name;
+            string solutionPlatform = "";
+
+            if (_dte.Solution.Projects.Count > 0)
+            {
+                var configmgr = _dte.Solution.Projects.Item(1).ConfigurationManager;
+                var config = configmgr.ActiveConfiguration;
+                solutionPlatform = config.PlatformName;
+            }
+
             List<EnvVar> internalVars = new List<EnvVar>
             {
                 new EnvVar{ name = "SolutionDir", value = Path.GetDirectoryName(fullPath) },
                 new EnvVar{ name = "SolutionName", value = Path.GetFileNameWithoutExtension(fullPath) },
                 new EnvVar{ name = "SolutionDrive", value = Path.GetPathRoot(fullPath) },
+                new EnvVar{ name = "SolutionConfiguration", value = solutionConfigurationName },
+                new EnvVar{ name = "SolutionPlatform", value = solutionPlatform },
             };
-
-            string solutionConfigurationName = _dte.Solution.SolutionBuild.ActiveConfiguration.Name;
 
             fullPath = Path.ChangeExtension(fullPath, ".slnenv");
 
-            if (ParseSlnEnvFile(fullPath, internalVars, solutionConfigurationName))
+            if (ParseSlnEnvFile(fullPath, internalVars, solutionConfigurationName, solutionPlatform))
                 _pane.OutputString(string.Format("Solution Environment {0} loaded\n", fullPath));
         }
     }

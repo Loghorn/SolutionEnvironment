@@ -43,7 +43,21 @@ MYPATH=%(HKLM\Software\MySoftware\Path)
 An environment variable may be applied to a specific Solution Configuration. The syntax for this is `ConfigurationName:Name=Value`.
 ```
 Debug:PATH=$(PATH);%(HKLM\Software\MySoftware\DebugPath)
-Release:PATH=$(PATH);%(HKLM\Software\MySoftware\DebugPath)
+Release:PATH=$(PATH);%(HKLM\Software\MySoftware\ReleasePath)
+```
+
+An environment variable may be applied to a specific Solution Configuration Platform. The syntax for this is `|Platform:Name=Value`. (Please note that this is only available if the solution contains at least one project)
+```
+|Win32:PATH=$(PATH);%(HKLM\Software\MySoftware\x86Path)
+|x64:PATH=$(PATH);%(HKLM\Software\MySoftware\x64Path)
+```
+
+Configuration and Platform can be combined.
+```
+Debug|Win32:PATH=$(PATH);%(HKLM\Software\MySoftware\x86DebugPath)
+Release|Win32:PATH=$(PATH);%(HKLM\Software\MySoftware\x86ReleasePath)
+Debug|x64:PATH=$(PATH);%(HKLM\Software\MySoftware\x64DebugPath)
+Release|x64:PATH=$(PATH);%(HKLM\Software\MySoftware\x64ReleasePath)
 ```
 
 Other .slnenv files may be included using the `include` or `forceinclude` keywords. The filename following each keyword should not contain the .slnenv extension.
