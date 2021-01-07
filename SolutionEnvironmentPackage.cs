@@ -35,8 +35,8 @@ namespace SolutionEnvironment
     /// </remarks>
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [Guid(SolutionEnvironmentPackage.PackageGuidString)]
-    //[ProvideAutoLoad(UIContextGuids80.SolutionHasSingleProject, PackageAutoLoadFlags.BackgroundLoad)]
-    //[ProvideAutoLoad(UIContextGuids80.SolutionHasMultipleProjects, PackageAutoLoadFlags.BackgroundLoad)]
+    [ProvideAutoLoad(UIContextGuids80.SolutionHasSingleProject, PackageAutoLoadFlags.BackgroundLoad)]
+    [ProvideAutoLoad(UIContextGuids80.SolutionHasMultipleProjects, PackageAutoLoadFlags.BackgroundLoad)]
     [ProvideAutoLoad(VSConstants.UICONTEXT.SolutionOpening_string, PackageAutoLoadFlags.BackgroundLoad)]
     [ProvideAutoLoad(VSConstants.UICONTEXT.FullSolutionLoading_string, PackageAutoLoadFlags.BackgroundLoad)]
     [ProvideAutoLoad(VSConstants.UICONTEXT.Debugging_string, PackageAutoLoadFlags.BackgroundLoad)]
@@ -277,7 +277,11 @@ namespace SolutionEnvironment
                     savedEnvironmentVariables.Add(envVar);
 
                     Environment.SetEnvironmentVariable(name, value);
-                    _pane.OutputString(string.Format("{0} = {1}\n", name, value));
+                    buffer = Environment.GetEnvironmentVariable(name);
+                    if (buffer != value)
+                        _pane.OutputString(string.Format("FAILED SETTING {0} = {1}\n", name, value));
+                    else
+                        _pane.OutputString(string.Format("SET {0} = {1}\n", name, value));
                 }
 
                 return true;
@@ -291,7 +295,11 @@ namespace SolutionEnvironment
             foreach (var envVar in savedEnvironmentVariables)
             {
                 Environment.SetEnvironmentVariable(envVar.name, envVar.value);
-                _pane.OutputString(string.Format("{0} = {1}\n", envVar.name, envVar.value));
+                string buffer = Environment.GetEnvironmentVariable(envVar.name);
+                if (buffer != envVar.value)
+                    _pane.OutputString(string.Format("FAILED SETTING {0} = {1}\n", envVar.name, envVar.value));
+                else
+                    _pane.OutputString(string.Format("SET {0} = {1}\n", envVar.name, envVar.value));
             }
         }
 
@@ -322,6 +330,7 @@ namespace SolutionEnvironment
                 string solutionConfigurationName = _dte.Solution.SolutionBuild.ActiveConfiguration.Name;
                 string solutionPlatform = "";
 
+#pragma warning disable VSTHRD010 // Invoke single-threaded types on Main thread
                 var configmgr = Traverse<Project>(_dte.Solution.Projects.Cast<Project>(), (p) =>
                 {
                     switch (p)
@@ -333,6 +342,7 @@ namespace SolutionEnvironment
                     }
                     return Enumerable.Empty<object>();
                 }).Where((p) => p.ConfigurationManager != null).Select((p) => p.ConfigurationManager).FirstOrDefault();
+#pragma warning restore VSTHRD010 // Invoke single-threaded types on Main thread
                 if (configmgr != null)
                 {
                     var config = configmgr.ActiveConfiguration;
